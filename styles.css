@@ -1,0 +1,25 @@
+/*
+ * The camera at the right end of a note's row in the file explorer. Same purple family as Folder Stats and
+ * Folder Merger. Change the colour here, or with a CSS snippet that sets the same variable.
+ */
+body {
+	--media-camera-color: #7c3aed;
+}
+
+.theme-dark {
+	--media-camera-color: #a78bfa;
+}
+
+.media-camera-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	margin-left: auto;
+	padding-left: 6px;
+	color: var(--media-camera-color);
+}
+
+.media-camera-icon svg {
+	width: 14px;
+	height: 14px;
+}

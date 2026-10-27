@@ -1,0 +1,9 @@
+{
+	"id": "media-camera",
+	"name": "Media Camera",
+	"version": "1.0.0",
+	"minAppVersion": "1.6.0",
+	"description": "A small purple camera at the right end of a note's row in the file explorer when the note has a photo, video or other media file in it.",
+	"author": "Zack",
+	"isDesktopOnly": false
+}
