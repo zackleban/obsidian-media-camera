@@ -1,6 +1,7 @@
-import { Plugin, TFile, getLinkpath, setIcon } from "obsidian";
+import { Plugin, TFile, TFolder, getLinkpath, setIcon } from "obsidian";
 
-const FILE_ROW = ".nav-file-title[data-path]";
+// Note rows and folder rows; a folder gets the camera when any note inside it, however deep, has media.
+const ROW = ".nav-file-title[data-path], .nav-folder-title[data-path]";
 const ICON_CLASS = "media-camera-icon";
 // Photos, video and sound: what Obsidian itself can show inside a note.
 const MEDIA = new Set([
@@ -14,6 +15,8 @@ const WEB_IMAGE = /!\[[^\]]*\]\(\s*<?https?:\/\/|<(?:img|video|audio)\s[^>]*src=
 export default class MediaCameraPlugin extends Plugin {
 	// True or false per note path, thrown away when that note (or any file) changes.
 	private cache = new Map<string, boolean>();
+	// Every folder holding a note with media, worked out again after any change.
+	private folders: Set<string> | null = null;
 	private observers: MutationObserver[] = [];
 	private queued = false;
 
@@ -21,12 +24,14 @@ export default class MediaCameraPlugin extends Plugin {
 		this.registerEvent(
 			this.app.metadataCache.on("changed", (file) => {
 				this.cache.delete(file.path);
+				this.folders = null;
 				this.queue();
 			}),
 		);
 		// A photo added, removed or renamed can change what a note's embeds point to.
 		const clear = () => {
 			this.cache.clear();
+			this.folders = null;
 			this.queue();
 		};
 		this.registerEvent(this.app.vault.on("create", clear));
@@ -66,18 +71,32 @@ export default class MediaCameraPlugin extends Plugin {
 
 	private paint() {
 		for (const leaf of this.app.workspace.getLeavesOfType("file-explorer")) {
-			leaf.view.containerEl.querySelectorAll<HTMLElement>(FILE_ROW).forEach((row) => this.mark(row));
+			leaf.view.containerEl.querySelectorAll<HTMLElement>(ROW).forEach((row) => this.mark(row));
 		}
 	}
 
 	private mark(row: HTMLElement) {
 		const file = this.app.vault.getAbstractFileByPath(row.dataset.path ?? "");
-		const want = file instanceof TFile && file.extension === "md" && this.hasMedia(file);
+		const want =
+			file instanceof TFolder
+				? this.mediaFolders().has(file.path)
+				: file instanceof TFile && file.extension === "md" && this.hasMedia(file);
 		const icon = row.querySelector(`:scope > .${ICON_CLASS}`);
 		if (want && !icon) {
-			const camera = row.createSpan({ cls: ICON_CLASS, attr: { "aria-label": "Has a photo or media" } });
+			const label = file instanceof TFolder ? "A note inside has a photo or media" : "Has a photo or media";
+			const camera = row.createSpan({ cls: ICON_CLASS, attr: { "aria-label": label } });
 			setIcon(camera, "camera");
 		} else if (!want && icon) icon.remove();
+	}
+
+	private mediaFolders(): Set<string> {
+		if (this.folders) return this.folders;
+		const folders = new Set<string>();
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			if (!this.hasMedia(file)) continue;
+			for (let f = file.parent; f && !f.isRoot() && !folders.has(f.path); f = f.parent) folders.add(f.path);
+		}
+		return (this.folders = folders);
 	}
 
 	private hasMedia(file: TFile): boolean {
@@ -102,6 +121,7 @@ export default class MediaCameraPlugin extends Plugin {
 		const text = await this.app.vault.cachedRead(file);
 		if (!WEB_IMAGE.test(text) || this.cache.get(file.path) !== false) return;
 		this.cache.set(file.path, true);
+		this.folders = null;
 		this.queue();
 	}
 }

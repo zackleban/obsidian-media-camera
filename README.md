@@ -1,7 +1,8 @@
 # Media Camera
 
 A small purple camera at the right end of a note's row in the file explorer when the note has a photo, video or other
-media in it. That's all it does.
+media in it, and on every folder above that note, up to the top folder, so you can follow the cameras down to it
+even when the folders are closed.
 
 A note gets the camera when it shows (embeds) any of these:
 

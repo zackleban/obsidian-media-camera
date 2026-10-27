@@ -24,7 +24,7 @@ __export(main_exports, {
 });
 module.exports = __toCommonJS(main_exports);
 var import_obsidian = require("obsidian");
-var FILE_ROW = ".nav-file-title[data-path]";
+var ROW = ".nav-file-title[data-path], .nav-folder-title[data-path]";
 var ICON_CLASS = "media-camera-icon";
 var MEDIA = /* @__PURE__ */ new Set([
   "png",
@@ -57,6 +57,8 @@ var MediaCameraPlugin = class extends import_obsidian.Plugin {
     super(...arguments);
     // True or false per note path, thrown away when that note (or any file) changes.
     this.cache = /* @__PURE__ */ new Map();
+    // Every folder holding a note with media, worked out again after any change.
+    this.folders = null;
     this.observers = [];
     this.queued = false;
   }
@@ -64,11 +66,13 @@ var MediaCameraPlugin = class extends import_obsidian.Plugin {
     this.registerEvent(
       this.app.metadataCache.on("changed", (file) => {
         this.cache.delete(file.path);
+        this.folders = null;
         this.queue();
       })
     );
     const clear = () => {
       this.cache.clear();
+      this.folders = null;
       this.queue();
     };
     this.registerEvent(this.app.vault.on("create", clear));
@@ -103,17 +107,27 @@ var MediaCameraPlugin = class extends import_obsidian.Plugin {
   }
   paint() {
     for (const leaf of this.app.workspace.getLeavesOfType("file-explorer")) {
-      leaf.view.containerEl.querySelectorAll(FILE_ROW).forEach((row) => this.mark(row));
+      leaf.view.containerEl.querySelectorAll(ROW).forEach((row) => this.mark(row));
     }
   }
   mark(row) {
     const file = this.app.vault.getAbstractFileByPath(row.dataset.path ?? "");
-    const want = file instanceof import_obsidian.TFile && file.extension === "md" && this.hasMedia(file);
+    const want = file instanceof import_obsidian.TFolder ? this.mediaFolders().has(file.path) : file instanceof import_obsidian.TFile && file.extension === "md" && this.hasMedia(file);
     const icon = row.querySelector(`:scope > .${ICON_CLASS}`);
     if (want && !icon) {
-      const camera = row.createSpan({ cls: ICON_CLASS, attr: { "aria-label": "Has a photo or media" } });
+      const label = file instanceof import_obsidian.TFolder ? "A note inside has a photo or media" : "Has a photo or media";
+      const camera = row.createSpan({ cls: ICON_CLASS, attr: { "aria-label": label } });
       (0, import_obsidian.setIcon)(camera, "camera");
     } else if (!want && icon) icon.remove();
+  }
+  mediaFolders() {
+    if (this.folders) return this.folders;
+    const folders = /* @__PURE__ */ new Set();
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      if (!this.hasMedia(file)) continue;
+      for (let f = file.parent; f && !f.isRoot() && !folders.has(f.path); f = f.parent) folders.add(f.path);
+    }
+    return this.folders = folders;
   }
   hasMedia(file) {
     const known = this.cache.get(file.path);
@@ -136,6 +150,7 @@ var MediaCameraPlugin = class extends import_obsidian.Plugin {
     const text = await this.app.vault.cachedRead(file);
     if (!WEB_IMAGE.test(text) || this.cache.get(file.path) !== false) return;
     this.cache.set(file.path, true);
+    this.folders = null;
     this.queue();
   }
 };
